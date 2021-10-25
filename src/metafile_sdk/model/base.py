@@ -27,10 +27,11 @@ class ModelBase(object):
 class MetaFileTask(Base, ModelBase):
 
     __tablename__ = 'meta_file_task'
+    md5 = Column(String(64), nullable=False)
     #
     size = Column(Integer, nullable=False)
     #
-    md5 = Column(String(32), nullable=False, unique=True)
+    name = Column(String(32), nullable=False, unique=True)
     #
     sha256 = Column(String(64), nullable=False, unique=True)
     #
@@ -73,7 +74,7 @@ class MetaFileTaskChunk(Base, ModelBase):
     #
     unspents_satoshi = Column(Integer)
     #
-    is_sync_metafile = Column(Boolean)
+    is_sync_metafile = Column(Boolean, default=False)
     #
     service_fee = Column(Integer)
 

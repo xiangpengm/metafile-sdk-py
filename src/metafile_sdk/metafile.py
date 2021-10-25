@@ -1,3 +1,4 @@
+import json
 import math
 import os
 from typing import List
@@ -28,6 +29,8 @@ class MetaFileType():
     chunk = 'metafile/chunk'
     # 索引
     index = 'metafile/index'
+    # 软连接
+    link = 'metafile/link'
 
 
 def create_meta_file_extended_data_list(
@@ -147,6 +150,7 @@ class Metafile():
         task = metaFileTaskOrm.get_or_create(files_resp.file_id, defaults=dict(
             size=files_request.size,
             md5=files_request.md5,
+            name=files_request.name,
             sha256=files_request.sha256,
             status=EnumMetaFileTask.doing,
             file_id=files_resp.file_id,
@@ -157,12 +161,22 @@ class Metafile():
         log("task", task)
         # 创建记录
         file_handler = open(file_path, 'rb')
-        recv_list = []
         info = self.metafile_api.info()
         for i in range(1, files_resp.chunks+1):
             seek_start = (i - 1) * files_resp.chunk_size
             file_handler.seek(seek_start)
             chunk_bytes = file_handler.read(files_resp.chunk_size)
+            log('chunk_bytes: ', chunk_bytes.__len__(), chunk_bytes)
+            log('tx size', tx_chunk_size(chunk_bytes))
+            data_list = create_meta_file_extended_data_list(
+                private_key.public_key.hex(),
+                metafile_protocol_node,
+                f'{task.sha256}_{i}',
+                chunk_bytes,
+                MetaFileType.chunk,
+                '0.0.1'
+            )
+            u, service_fee = per_utxo_amount(chunk_bytes, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
             file_chunk = metaFileTaskChunkOrm.get_or_create(files_resp.file_id, i, defaults=dict(
                 file_id=files_resp.file_id,
                 chunk_index=i,
@@ -171,53 +185,48 @@ class Metafile():
                 status=EnumMetaFileTask.doing,
                 chunk_binary=chunk_bytes,
                 chunk_binary_length=chunk_bytes.__len__(),
-                estimate_tx_size = tx_chunk_size(chunk_bytes)
+                estimate_tx_size = tx_chunk_size(chunk_bytes),
+                service_fee=service_fee,
             ))
-            log('chunk_bytes: ', chunk_bytes.__len__(), chunk_bytes)
-            log('chunk_bytes: ', file_chunk)
-            log('tx size', tx_chunk_size(chunk_bytes))
-            #
-            data_list = create_meta_file_extended_data_list(
-                private_key.public_key.hex(),
-                metafile_protocol_node,
-                f'{task.sha256}_{file_chunk.chunk_index}',
-                file_chunk.chunk_binary,
-                MetaFileType.chunk,
-                '0.0.1'
-            )
-            u, service_fee = per_utxo_amount(chunk_bytes, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
-            print(math.ceil(tx_chunk_size(chunk_bytes)))
-            item = (private_key.address, u, 'satoshi')
-            recv_list.append(item)
+            print('file_chunk', file_chunk)
+            # item = (private_key.address, u, 'satoshi')
+            # recv_list.append(item)
         # split utxo
         # print(info)
         # print(recv_list)
         # r = private_key.send(recv_list)
         # print(r)
+        # return
         # create_tx
-        item_list: List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_doing_chunk_by_number(files_resp.file_id, 5)
         from bitsv.network.services.whatsonchain import Whatsonchain
+        item_list: List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_doing_chunk_by_number(files_resp.file_id, 5)
         woc = Whatsonchain()
-        for item in item_list:
-            # 获取绑定的utxo
-            up = item.get_unspents()
-            # 构造交易
-            data_list = create_meta_file_extended_data_list(
-                private_key.public_key.hex(),
-                metafile_protocol_node,
-                f'{task.sha256}_{item.chunk_index}',
-                item.chunk_binary,
-                MetaFileType.chunk,
-                '0.0.1'
-            )
-            outputs = [
-                (info.service_fee_address, item.service_fee, 'satoshi')
-            ]
-            tx = private_key.create_op_return_tx(data_list, outputs=outputs, unspents=up, fee=DEFAULT_FEE_SLOW)
-            txid = woc.broadcast_rawtx(tx)
-            log("txid", txid)
+        # if item_list.__len__() > 0:
+        # for item in item_list:
+        #     # 获取绑定的utxo
+        #     up = item.get_unspents()
+        #     # 构造交易
+        #     data_list = create_meta_file_extended_data_list(
+        #         private_key.public_key.hex(),
+        #         metafile_protocol_node,
+        #         f'{task.sha256}_{item.chunk_index}',
+        #         item.chunk_binary,
+        #         MetaFileType.chunk,
+        #         '0.0.1'
+        #     )
+        #     outputs = [
+        #         (info.service_fee_address, item.service_fee, 'satoshi')
+        #     ]
+        #     tx = private_key.create_op_return_tx(data_list, outputs=outputs, unspents=up, fee=DEFAULT_FEE_SLOW)
+        #     txid = woc.broadcast_rawtx(tx)
+        #     if txid:
+        #         item.status = EnumMetaFileTask.success
+        #         item.txid= txid
+        #         metaFileTaskChunkOrm.save(item)
+        #     log("txid", txid)
         log('is_all_success', metaFileTaskChunkOrm.is_all_success(files_resp.file_id))
-        if metaFileTaskChunkOrm.is_all_success(files_resp.file_id):
+        # return
+        if metaFileTaskChunkOrm.is_all_success(files_resp.file_id) and not metaFileTaskChunkOrm.is_all_chunk_sync(files_resp.file_id):
             sync_items:List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_no_sync_metafile_chunk(files_resp.file_id)
             for sync_item in sync_items:
                 chunk_request = ChunksRequest(
@@ -228,7 +237,90 @@ class Metafile():
                     txid=sync_item.txid
                 )
                 chunk_resp = self.metafile_api.chunks(chunk_request)
+                if chunk_resp.code == 0:
+                    sync_item.is_sync_metafile = True
+                    metaFileTaskChunkOrm.save(sync_item)
                 log(chunk_resp)
+        if metaFileTaskChunkOrm.is_all_chunk_sync(files_resp.file_id) and not metaFileTaskChunkOrm.is_index_chunk_async(files_resp.file_id):
+            # 创建index交易, 并广播
+            log('is_index_chunk_async', metaFileTaskChunkOrm.is_index_chunk_async(files_resp.file_id))
+            _chunk_list: List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_all(files_resp.file_id)
+            chunk_list = [{
+                'md5': chunk.chunk_md5,
+                'sha256': chunk.chunk_sha256,
+                'txid': chunk.txid
+            } for chunk in _chunk_list]
+            log('_chunk_list', _chunk_list)
+            payload = {
+                'md5': task.md5,
+                'sha256': task.sha256,
+                'fileSize': task.size,
+                'chunkNumber': task.chunks,
+                'chunkSize': task.size,
+                'dataType': task.data_type,
+                'name': task.name,
+                'chunkList': chunk_list
+            }
+            log('258 payload', payload)
+            index_bytes = json.dumps(payload, separators=(',', ':')).encode()
+            data_list = create_meta_file_extended_data_list(
+                private_key.public_key.hex(),
+                metafile_protocol_node,
+                f'{task.sha256}_{0}',
+                index_bytes,
+                MetaFileType.index,
+                '0.0.1'
+            )
+            u, service_fee = per_utxo_amount(index_bytes, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
+            #
+            log('270 payload', service_fee)
+            file_index = metaFileTaskChunkOrm.get_or_create(files_resp.file_id, 0, defaults=dict(
+                file_id=files_resp.file_id,
+                chunk_index=0,
+                chunk_md5=md5_bytes(index_bytes),
+                chunk_sha256=sha256_bytes(index_bytes),
+                status=EnumMetaFileTask.doing,
+                chunk_binary=index_bytes,
+                chunk_binary_length=index_bytes.__len__(),
+                estimate_tx_size = tx_chunk_size(index_bytes),
+                service_fee=service_fee
+            ))
+            if file_index.status == EnumMetaFileTask.success:
+                file_index.status = EnumMetaFileTask.success
+                metaFileTaskChunkOrm.save(file_index)
+                # return file_index.txid
+            else:
+                up = private_key.get_unspents()
+                outputs = [
+                    (info.service_fee_address, file_index.service_fee, 'satoshi')
+                ]
+                tx = private_key.create_op_return_tx(data_list, outputs=outputs, unspents=up, fee=DEFAULT_FEE_SLOW)
+                txid = woc.broadcast_rawtx(tx)
+                if txid:
+                    file_index.status = EnumMetaFileTask.success
+                    file_index.txid = txid
+                    metaFileTaskChunkOrm.save(file_index)
+            # sync to metafile
+            if file_index.is_sync_metafile:
+                return file_index.txid
+            else:
+                chunk_request = ChunksRequest(
+                    file_id=files_resp.file_id,
+                    md5=file_index.chunk_md5,
+                    sha256=file_index.chunk_sha256,
+                    chunk_sequence=file_index.chunk_index,
+                    txid=file_index.txid
+                )
+                chunk_resp = self.metafile_api.chunks(chunk_request)
+                log('chunk_resp', chunk_resp)
+                log("payload", u)
+                log("index is_sync_metafile", file_index.is_sync_metafile)
+                if chunk_resp.code == 0:
+                    file_index.is_sync_metafile = True
+                    metaFileTaskChunkOrm.save(file_index)
+                    return file_index.txid
+                else:
+                    raise ValueError()
 
     def upload_metafile_from_bytes(private_key: PrivateKey, metafile_protocol_node: str, data_bytes: bytes, metaid: str=None):
         """

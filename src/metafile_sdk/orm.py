@@ -47,9 +47,26 @@ class MetaFileTaskChunkOrm(OrmBase):
 
     def find_doing_chunk_by_number(self, file_id, number=5):
         instant_list = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index!=0,
             MetaFileTaskChunk.file_id==file_id,
             MetaFileTaskChunk.status!=EnumMetaFileTask.success
         ).limit(number)
+        return list(instant_list)
+
+    def find_no_unspent_chunk(self, file_id, number=5):
+        instant_list = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index!=0,
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.status!=EnumMetaFileTask.success,
+            MetaFileTaskChunk.unspents_txid==None
+        ).limit(number)
+        return list(instant_list)
+
+    def find_all(self, file_id):
+        instant_list = self.session.query(MetaFileTaskChunk).filter(
+                MetaFileTaskChunk.chunk_index!=0,
+                MetaFileTaskChunk.file_id==file_id
+            ).all()
         return list(instant_list)
 
     def is_all_success(self, file_id):
@@ -61,8 +78,31 @@ class MetaFileTaskChunkOrm(OrmBase):
 
     def find_no_sync_metafile_chunk(self, file_id, number=5):
         instant_list = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index!=0,
             MetaFileTaskChunk.file_id==file_id,
             MetaFileTaskChunk.status==EnumMetaFileTask.success,
             MetaFileTaskChunk.is_sync_metafile==False
         ).limit(number)
         return list(instant_list)
+
+    def is_all_chunk_sync(self, file_id):
+        instant = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index!=0,
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.is_sync_metafile==False
+        ).first()
+        return instant is None
+
+    def is_index_chunk_async(self, file_id):
+        instant = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index==0,
+            MetaFileTaskChunk.file_id==file_id
+        ).first()
+        if instant is None:
+            return False
+        else:
+            instant: MetaFileTaskChunk
+            if instant.is_sync_metafile:
+                return True
+            else:
+                return False

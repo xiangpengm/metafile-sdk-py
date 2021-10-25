@@ -1,3 +1,5 @@
+from threading import Lock
+
 from sqlalchemy.orm import Session
 
 from metafile_sdk.model.base import MetaFileTask, MetaFileTaskChunk, EnumMetaFileTask
@@ -6,6 +8,7 @@ from metafile_sdk.model.base import MetaFileTask, MetaFileTaskChunk, EnumMetaFil
 class OrmBase():
 
     def __init__(self, session):
+        self._lock = Lock()
         self.session: Session = session
 
     def save(self, instant):
@@ -58,7 +61,8 @@ class MetaFileTaskChunkOrm(OrmBase):
             MetaFileTaskChunk.chunk_index!=0,
             MetaFileTaskChunk.file_id==file_id,
             MetaFileTaskChunk.status!=EnumMetaFileTask.success,
-            MetaFileTaskChunk.unspents_txid==None
+            MetaFileTaskChunk.unspents_txid==None,
+            MetaFileTaskChunk.unspents_index==None,
         ).limit(number)
         return list(instant_list)
 

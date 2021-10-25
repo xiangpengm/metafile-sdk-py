@@ -5,6 +5,7 @@ from bitsv.network.meta import Unspent
 from sqlalchemy import Column, String, create_engine, BigInteger, TIMESTAMP, func, text, Integer, BLOB, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.pool import SingletonThreadPool
 
 
 class EnumMetaFileTask(str, Enum):
@@ -56,7 +57,7 @@ class MetaFileTaskChunk(Base, ModelBase):
     # 分片的md值
     chunk_md5 = Column(String(32), nullable=False)
     # 分片的sha256值
-    chunk_sha256 = Column(String(64), nullable=False, unique=True)
+    chunk_sha256 = Column(String(64), nullable=False)
     # 上传任务分片状态
     status = Column(String(100), nullable=False)
     # 广播交易的id
@@ -85,7 +86,10 @@ class MetaFileTaskChunk(Base, ModelBase):
 
 def get_session_by_metaid(cache_dir, metaid):
     full_db_path = os.path.join(cache_dir, f'.metafile_sdk_cache_{metaid}.db')
-    engine = create_engine(f'sqlite:///{full_db_path}')
+    engine = create_engine(f'sqlite:///{full_db_path}',
+                           poolclass=SingletonThreadPool,
+                           connect_args={"check_same_thread": False}
+                           )
     Session = sessionmaker(bind=engine)
     return Session()
 

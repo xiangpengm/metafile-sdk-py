@@ -63,6 +63,19 @@ class MetaFileTaskChunkOrm(OrmBase):
         ).limit(number)
         return list(instant_list)
 
+    def update_no_success_tx(self, file_id):
+        self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index!=0,
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.status!=EnumMetaFileTask.success,
+            MetaFileTaskChunk.unspents_txid!=None,
+            MetaFileTaskChunk.unspents_index!=None,
+        ).update({
+            "unspents_txid": None,
+            "unspents_index": None,
+        })
+        self.commit()
+
     def find_no_unspent_chunk(self, file_id, number=5):
         instant_list = self.session.query(MetaFileTaskChunk).filter(
             MetaFileTaskChunk.chunk_index!=0,

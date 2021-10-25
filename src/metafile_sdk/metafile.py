@@ -1,8 +1,11 @@
 import os
 from bitsv import PrivateKey
+from sqlalchemy.orm import Session
+
 from metafile_sdk.api import ShowmandbApi, WocApi, MetafileApi
 from metafile_sdk.api.metafile import FilesRequest
-from metafile_sdk.model.base import get_session_by_metaid
+from metafile_sdk.model.base import get_session_by_metaid, MetaFileTask, MetaFileTaskChunk, EnumMetaFileTask
+from metafile_sdk.orm import MetaFileTaskOrm, MetaFileTaskChunkOrm
 from metafile_sdk.utils import log, file_data_type
 from metafile_sdk.transaction import Transaction, EnumScriptType
 from metafile_sdk.hash_func import md5_file, sha256_file, md5_bytes, sha256_bytes
@@ -81,6 +84,7 @@ class Metafile():
         _sha256 = sha256_file(file_path)
         file_stat = os.stat(file_path)
         file_size = file_stat.st_size
+        print('file_size', type(file_size))
         data_type = file_data_type(file_path)
         # 构造任务
         files_request = FilesRequest(
@@ -94,10 +98,42 @@ class Metafile():
         files_resp = self.metafile_api.files(files_request)
         log('filesRequest', files_request)
         log('response', files_resp)
-        session = get_session_by_metaid(self.cache_dir, metaid)
-        log("session", session)
+        # 获取到session
+        session: Session = get_session_by_metaid(self.cache_dir, metaid)
+        # 创建表
+        MetaFileTask.metadata.create_all(session.get_bind())
+        MetaFileTaskChunk.metadata.create_all(session.get_bind())
+        metaFileTaskOrm = MetaFileTaskOrm(session)
+        metaFileTaskChunkOrm = MetaFileTaskChunkOrm(session)
+        # 获取 or 创建任务
+        task = metaFileTaskOrm.get_or_create(files_resp.file_id, defaults=dict(
+            size=files_request.size,
+            md5=files_request.md5,
+            sha256=files_request.sha256,
+            status=EnumMetaFileTask.doing,
+            file_id=files_resp.file_id,
+            chunk_size=files_resp.chunk_size,
+            data_type=files_request.data_type,
+            chunks=files_resp.chunks
+        ))
+        log("task", task)
         # 创建记录
-
+        file_handler = open(file_path, 'rb')
+        for i in range(1, files_resp.chunks+1):
+            seek_start = (i - 1) * files_resp.chunk_size
+            file_handler.seek(seek_start)
+            chunk_bytes = file_handler.read(files_resp.chunk_size)
+            file_chunk = metaFileTaskChunkOrm.get_or_create(files_resp.file_id, i, defaults=dict(
+                file_id=files_resp.file_id,
+                chunk_index=i,
+                chunk_md5=md5_bytes(chunk_bytes),
+                chunk_sha256=sha256_bytes(chunk_bytes),
+                status=EnumMetaFileTask.doing,
+                chunk_binary=chunk_bytes,
+                chunk_binary_length=chunk_bytes.__len__()
+            ))
+            print('chunk_bytes: ', chunk_bytes.__len__(), chunk_bytes)
+            print('chunk_bytes: ', file_chunk)
 
 
     def upload_metafile_from_bytes(private_key: PrivateKey, metafile_protocol_node: str, data_bytes: bytes, metaid: str=None):

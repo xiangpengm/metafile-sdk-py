@@ -62,7 +62,7 @@ class MetaFileBaseResponse(BaseModel):
 
 class MetaFileFilesResponse(MetaFileBaseResponse):
     #
-    chunk_size: str
+    chunk_size: int
     #
     chunks: int
     #
@@ -88,6 +88,6 @@ class MetafileApi(ApiBase):
         data = self._get(self._info)
         return InfoResponse(**data)
 
-    def files(self, args: FilesRequest) -> MetaFileBaseResponse:
+    def files(self, args: FilesRequest) -> MetaFileFilesResponse:
         data = self._post(self._files, args.dict())
         return MetaFileFilesResponse(**data)

@@ -1,7 +1,8 @@
 import os
 from enum import Enum
 
-from sqlalchemy import Column, String, create_engine, BigInteger, TIMESTAMP, func, text, Integer, BLOB
+from bitsv.network.meta import Unspent
+from sqlalchemy import Column, String, create_engine, BigInteger, TIMESTAMP, func, text, Integer, BLOB, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -63,10 +64,28 @@ class MetaFileTaskChunk(Base, ModelBase):
     chunk_binary = Column(BLOB, nullable=False)
     # 存储分片原始数据的长度
     chunk_binary_length = Column(Integer, nullable=False)
+    # 预计交易大小
+    estimate_tx_size = Column(Integer, nullable=False)
+    #
+    unspents_txid = Column(String(64))
+    #
+    unspents_index = Column(Integer)
+    #
+    unspents_satoshi = Column(Integer)
+    #
+    is_sync_metafile = Column(Boolean)
+    #
+    service_fee = Column(Integer)
 
+    def get_unspents(self):
+        if self.unspents_txid and self.unspents_satoshi:
+            u = Unspent(self.unspents_satoshi, 0, self.unspents_txid, self.unspents_index)
+            return [u]
 
 def get_session_by_metaid(cache_dir, metaid):
     full_db_path = os.path.join(cache_dir, f'.metafile_sdk_cache_{metaid}.db')
     engine = create_engine(f'sqlite:///{full_db_path}')
     Session = sessionmaker(bind=engine)
     return Session()
+
+

@@ -53,6 +53,20 @@ class FilesRequest(BaseModel):
         return v
 
 
+class ChunksRequest(BaseModel):
+    # 上传任务id
+    file_id: str = Field(min_length=32, max_length=32)
+    # 分片的哈希
+    md5: str = Field(min_length=32, max_length=32)
+    # sha256
+    sha256: str = Field(min_length=64, max_length=64)
+    # 文件片的下标
+    chunk_sequence: int = Field(ge=0)
+    #
+    txid: str = Field(min_length=64, max_length=64)
+
+
+
 class MetaFileBaseResponse(BaseModel):
     # 错误码
     code: int
@@ -91,3 +105,7 @@ class MetafileApi(ApiBase):
     def files(self, args: FilesRequest) -> MetaFileFilesResponse:
         data = self._post(self._files, args.dict())
         return MetaFileFilesResponse(**data)
+
+    def chunks(self, args: ChunksRequest) -> MetaFileBaseResponse:
+        data = self._post(self._chunks, args.dict())
+        return MetaFileBaseResponse(**data)

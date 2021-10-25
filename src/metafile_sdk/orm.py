@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from metafile_sdk.model.base import MetaFileTask, MetaFileTaskChunk
+from metafile_sdk.model.base import MetaFileTask, MetaFileTaskChunk, EnumMetaFileTask
 
 
 class OrmBase():
@@ -44,3 +44,25 @@ class MetaFileTaskChunkOrm(OrmBase):
             instant = MetaFileTaskChunk(**defaults)
             self.save(instant)
             return instant
+
+    def find_doing_chunk_by_number(self, file_id, number=5):
+        instant_list = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.status!=EnumMetaFileTask.success
+        ).limit(number)
+        return list(instant_list)
+
+    def is_all_success(self, file_id):
+        instant = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.status!=EnumMetaFileTask.success
+        ).first()
+        return instant is None
+
+    def find_no_sync_metafile_chunk(self, file_id, number=5):
+        instant_list = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.status==EnumMetaFileTask.success,
+            MetaFileTaskChunk.is_sync_metafile==False
+        ).limit(number)
+        return list(instant_list)

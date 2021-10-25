@@ -6,15 +6,22 @@ from metafile_sdk.model.base import MetaFileTask, MetaFileTaskChunk, EnumMetaFil
 
 
 class OrmBase():
+    _lock = Lock()
 
     def __init__(self, session):
-        self._lock = Lock()
         self.session: Session = session
 
     def save(self, instant):
+        self._lock.acquire(timeout=0.005)
         self.session.add(instant)
         self.session.commit()
+        self._lock.release()
 
+    def add(self, instant):
+        self.session.add(instant)
+
+    def commit(self):
+        self.session.commit()
 
 class MetaFileTaskOrm(OrmBase):
 

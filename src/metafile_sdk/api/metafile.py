@@ -83,6 +83,15 @@ class MetaFileFilesResponse(MetaFileBaseResponse):
     file_id: str
 
 
+class ChunksQueryResponse(MetaFileBaseResponse):
+    #
+    md5: str = None
+    #
+    sha256: str = None
+    #
+    txid: str = None
+
+
 class MetafileApi(ApiBase):
     # 获取服务详情信息
     _info = '/info'
@@ -90,6 +99,8 @@ class MetafileApi(ApiBase):
     _files = '/v1/files'
     # 上传任务分片tx接口
     _chunks = '/v1/chunks'
+    #
+    _chunks_query = '/v1/chunks/query'
 
     def __init__(self, base_url: str, headers):
         super().__init__(base_url, headers)
@@ -109,3 +120,7 @@ class MetafileApi(ApiBase):
     def chunks(self, args: ChunksRequest) -> MetaFileBaseResponse:
         data = self._post(self._chunks, args.dict())
         return MetaFileBaseResponse(**data)
+
+    def chunks_query(self, md5, sha256) -> ChunksQueryResponse:
+        data = self._get(self._chunks_query, dict(md5=md5, sha256=sha256))
+        return ChunksQueryResponse(**data)

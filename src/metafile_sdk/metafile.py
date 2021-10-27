@@ -394,7 +394,7 @@ class Metafile():
         files_request, files_resp = self._get_files_resp(metaid, file_path)
         # 检查是否存在
         resp = self.metafile_api.files_query(files_request.sha256, metaid)
-        if resp.code == 0:
+        if resp.txid:
             return resp.txid
         log('filesRequest', files_request)
         log('response', files_resp)

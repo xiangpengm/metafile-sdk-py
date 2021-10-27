@@ -28,8 +28,6 @@ class ModelBase(object):
 class MetaFileTask(Base, ModelBase):
 
     __tablename__ = 'meta_file_task'
-    md5 = Column(String(64), nullable=False)
-    #
     size = Column(Integer, nullable=False)
     #
     name = Column(String(32), nullable=False, unique=True)
@@ -54,8 +52,6 @@ class MetaFileTaskChunk(Base, ModelBase):
     file_id = Column(String(64), nullable=False)
     # 文件片的下标, 0 代表索引文件或者 未分片文件
     chunk_index = Column(Integer, nullable=False)
-    # 分片的md值
-    chunk_md5 = Column(String(32), nullable=False)
     # 分片的sha256值
     chunk_sha256 = Column(String(64), nullable=False)
     # 上传任务分片状态

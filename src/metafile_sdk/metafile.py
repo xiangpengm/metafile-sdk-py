@@ -14,7 +14,7 @@ from metafile_sdk.model.base import get_session_by_metaid, MetaFileTask, MetaFil
 from metafile_sdk.orm import MetaFileTaskOrm, MetaFileTaskChunkOrm
 from metafile_sdk.utils import log, file_data_type
 from metafile_sdk.transaction import Transaction, EnumScriptType
-from metafile_sdk.hash_func import md5_file, sha256_file, md5_bytes, sha256_bytes
+from metafile_sdk.hash_func import sha256_file, sha256_bytes
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
@@ -112,7 +112,6 @@ class Metafile():
         log('pk_valid', pk_valid)
 
     def _get_files_resp(self, metaid, file_path):
-        _md5 = md5_file(file_path)
         _sha256 = sha256_file(file_path)
         file_stat = os.stat(file_path)
         file_size = file_stat.st_size
@@ -122,7 +121,6 @@ class Metafile():
         files_request = FilesRequest(
             name=os.path.basename(file_path),
             size=file_size,
-            md5=_md5,
             sha256=_sha256,
             metaid=metaid,
             data_type=data_type,
@@ -142,13 +140,12 @@ class Metafile():
                 f'{task.sha256}_{i}',
                 chunk_bytes,
                 MetaFileType.chunk,
-                '0.0.1'
+                '1.0.2'
             )
             u, service_fee = per_utxo_amount(chunk_bytes, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
             metaFileTaskChunkOrm.get_or_create(files_resp.file_id, i, defaults=dict(
                 file_id=files_resp.file_id,
                 chunk_index=i,
-                chunk_md5=md5_bytes(chunk_bytes),
                 chunk_sha256=sha256_bytes(chunk_bytes),
                 status=EnumMetaFileTask.doing,
                 chunk_binary=chunk_bytes,
@@ -159,9 +156,8 @@ class Metafile():
             ))
 
     def _scan_hash_processor(self, item, metaFileTaskChunkOrm):
-        _md5 = item.chunk_md5
         _sha256 = item.chunk_sha256
-        chunks_query = self.metafile_api.chunks_query(_md5, _sha256)
+        chunks_query = self.metafile_api.chunks_query(_sha256)
         if chunks_query.code == 0:
             item.status = EnumMetaFileTask.success
             item.txid = chunks_query.txid
@@ -216,7 +212,7 @@ class Metafile():
             f'{task.sha256}_{item.chunk_index}',
             item.chunk_binary,
             MetaFileType.chunk,
-            '0.0.1'
+            '1.0.2'
         )
         outputs = [
             (info.service_fee_address, item.service_fee, 'satoshi')
@@ -243,6 +239,7 @@ class Metafile():
                 if items.__len__() == 0:
                     break
                 items_len = items.__len__()
+                # 广播交易
                 r = thread_pool.map(self._push_chunk_to_chain_processor,
                                      items,
                                      (private_key for _ in range(items_len)),
@@ -254,20 +251,30 @@ class Metafile():
                 result = [i for i in r]
                 metaFileTaskChunkOrm.commit()
                 log('result', result)
+                # 上传服务
+                r2 = thread_pool.map(self._push_chunk_to_metafile_processor,
+                                    items,
+                                    (files_resp for _ in range(items_len)),
+                                    (metaFileTaskChunkOrm for _ in range(items_len)),
+                                    )
+                result = [i for i in r2]
+                log('result2', result)
+                metaFileTaskChunkOrm.commit()
 
-    def _push_chunk_to_metafile_processor(self, sync_item, files_resp, metaFileTaskChunkOrm):
-        chunk_request = ChunksRequest(
-            file_id=files_resp.file_id,
-            md5=sync_item.chunk_md5,
-            sha256=sync_item.chunk_sha256,
-            chunk_sequence=sync_item.chunk_index,
-            txid=sync_item.txid
-        )
-        chunk_resp = self.metafile_api.chunks(chunk_request)
-        log('chunk_resp', sync_item.id, chunk_request.txid, chunk_resp)
-        if chunk_resp.code == 0:
-            sync_item.is_sync_metafile = True
-            metaFileTaskChunkOrm.add(sync_item)
+    def _push_chunk_to_metafile_processor(self, sync_item: MetaFileTaskChunk, files_resp, metaFileTaskChunkOrm):
+        #
+        if sync_item.status == EnumMetaFileTask.success:
+            chunk_request = ChunksRequest(
+                file_id=files_resp.file_id,
+                sha256=sync_item.chunk_sha256,
+                chunk_sequence=sync_item.chunk_index,
+                txid=sync_item.txid
+            )
+            chunk_resp = self.metafile_api.chunks(chunk_request)
+            log('chunk_resp', sync_item.id, chunk_request.txid, chunk_resp)
+            if chunk_resp.code == 0:
+                sync_item.is_sync_metafile = True
+                metaFileTaskChunkOrm.add(sync_item)
 
     def _push_chunk_to_metafile(self, metaFileTaskChunkOrm, files_resp):
         with ThreadPoolExecutor(self._thread_num) as thread_pool:
@@ -293,13 +300,11 @@ class Metafile():
             log('is_index_chunk_async', metaFileTaskChunkOrm.is_index_chunk_async(files_resp.file_id))
             _chunk_list: List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_all(files_resp.file_id)
             chunk_list = [{
-                'md5': chunk.chunk_md5,
                 'sha256': chunk.chunk_sha256,
                 'txid': chunk.txid
             } for chunk in _chunk_list]
             log('_chunk_list', _chunk_list)
             payload = {
-                'md5': task.md5,
                 'sha256': task.sha256,
                 'fileSize': task.size,
                 'chunkNumber': task.chunks,
@@ -316,7 +321,7 @@ class Metafile():
                 f'{task.sha256}_{0}',
                 index_bytes,
                 MetaFileType.index,
-                '0.0.1'
+                '1.0.2'
             )
             u, service_fee = per_utxo_amount(index_bytes, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
             #
@@ -324,7 +329,6 @@ class Metafile():
             file_index = metaFileTaskChunkOrm.get_or_create(files_resp.file_id, 0, defaults=dict(
                 file_id=files_resp.file_id,
                 chunk_index=0,
-                chunk_md5=md5_bytes(index_bytes),
                 chunk_sha256=sha256_bytes(index_bytes),
                 status=EnumMetaFileTask.doing,
                 chunk_binary=index_bytes,
@@ -351,7 +355,6 @@ class Metafile():
             else:
                 chunk_request = ChunksRequest(
                     file_id=files_resp.file_id,
-                    md5=file_index.chunk_md5,
                     sha256=file_index.chunk_sha256,
                     chunk_sequence=file_index.chunk_index,
                     txid=file_index.txid
@@ -372,7 +375,7 @@ class Metafile():
         0. 检查文件存在 ok
         1. 验证metaid  ok
         2. 验证metafile_protocol_node的公钥与private_key对应的公钥一致 ok
-        3. 验证计算sha256 计算md5 ok
+        3. 验证计算sha256 ok
         4. 生成task ok
         5. 拆分文件到sqlite
         6. 先获取一遍服务是否有chunk
@@ -401,7 +404,6 @@ class Metafile():
         # 获取 or 创建任务
         task = metaFileTaskOrm.get_or_create(files_resp.file_id, defaults=dict(
             size=files_request.size,
-            md5=files_request.md5,
             name=files_request.name,
             sha256=files_request.sha256,
             status=EnumMetaFileTask.doing,
@@ -413,27 +415,62 @@ class Metafile():
         log("task", task)
         # 创建记录
         info = self.metafile_api.info()
-        self._scan_chunk_record(
-            private_key,
-            metafile_protocol_node,
-            file_path,
-            files_resp,
-            task,
-            feeb,
-            metaFileTaskChunkOrm,
-            info
-        )
-        # self._scan_hash(metaFileTaskChunkOrm, files_resp)
         from bitsv.network.services.whatsonchain import Whatsonchain
         woc = Whatsonchain()
-        self._split_utxo(private_key, metaFileTaskChunkOrm, files_resp.file_id, woc)
-        # multi thread
-        self._push_chunk_to_chain(private_key, metafile_protocol_node, metaFileTaskChunkOrm, files_resp, task, info, woc)
-        log('is_all_success', metaFileTaskChunkOrm.is_all_success(files_resp.file_id))
-        # multi thread
-        self._push_chunk_to_metafile(metaFileTaskChunkOrm, files_resp)
-        txid = self._push_index_to_metafile(private_key, metafile_protocol_node, feeb, metaFileTaskChunkOrm, files_resp, task, info, woc)
-        return txid
+        if files_resp.chunks == 0:
+            #
+            log('upload origin')
+            file_bytes = open(file_path, 'rb').read()
+            data_list = create_meta_file_extended_data_list(
+                private_key.public_key.hex(),
+                metafile_protocol_node,
+                files_request.name,
+                file_bytes,
+                files_request.data_type,
+                '1.0.0'
+            )
+            u, service_fee = per_utxo_amount(file_bytes, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
+            up = private_key.get_unspents()
+            #
+            outputs = [
+                (info.service_fee_address, service_fee, 'satoshi')
+            ]
+            tx = private_key.create_op_return_tx(data_list, outputs=outputs, unspents=up, fee=DEFAULT_FEE_SLOW)
+            try:
+                txid = woc.broadcast_rawtx(tx)
+                chunk_request = ChunksRequest(
+                    file_id=files_resp.file_id,
+                    sha256=files_request.sha256,
+                    chunk_sequence=0,
+                    txid=txid)
+                chunk_resp = self.metafile_api.chunks(chunk_request)
+                log('chunk_resp', chunk_resp)
+                if chunk_resp.code == 0:
+                    return txid
+            except Exception as e:
+                log('e', e)
+                pass
+            print(u, service_fee)
+        else :
+            self._scan_chunk_record(
+                private_key,
+                metafile_protocol_node,
+                file_path,
+                files_resp,
+                task,
+                feeb,
+                metaFileTaskChunkOrm,
+                info
+            )
+            # self._scan_hash(metaFileTaskChunkOrm, files_resp)
+            self._split_utxo(private_key, metaFileTaskChunkOrm, files_resp.file_id, woc)
+            # multi thread
+            self._push_chunk_to_chain(private_key, metafile_protocol_node, metaFileTaskChunkOrm, files_resp, task, info, woc)
+            log('is_all_success', metaFileTaskChunkOrm.is_all_success(files_resp.file_id))
+            # multi thread
+            self._push_chunk_to_metafile(metaFileTaskChunkOrm, files_resp)
+            txid = self._push_index_to_metafile(private_key, metafile_protocol_node, feeb, metaFileTaskChunkOrm, files_resp, task, info, woc)
+            return txid
 
     def upload_metafile_from_bytes(private_key: PrivateKey, metafile_protocol_node: str, data_bytes: bytes, metaid: str=None):
         """

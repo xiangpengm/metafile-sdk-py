@@ -19,22 +19,12 @@ class FilesRequest(BaseModel):
     name: str
     # 文件大小
     size: int = Field(gt=0)
-    # 文件md5值
-    md5: str = Field(min_length=32, max_length=32)
     # 文件sha256值
     sha256: str = Field(min_length=64, max_length=64)
     # 用户的metaid
     metaid: str = Field(min_length=64, max_length=64)
     # 数据类型
     data_type: str = Field(max_length=100)
-
-    @validator('md5')
-    def md5_hex(cls, v):
-        try:
-            bytes.fromhex(v)
-        except Exception as _:
-            raise ValueError('md5 must be hex string')
-        return v
 
     @validator('sha256')
     def sha256_hex(cls, v):
@@ -56,8 +46,6 @@ class FilesRequest(BaseModel):
 class ChunksRequest(BaseModel):
     # 上传任务id
     file_id: str = Field(min_length=32, max_length=32)
-    # 分片的哈希
-    md5: str = Field(min_length=32, max_length=32)
     # sha256
     sha256: str = Field(min_length=64, max_length=64)
     # 文件片的下标
@@ -84,8 +72,6 @@ class MetaFileFilesResponse(MetaFileBaseResponse):
 
 
 class ChunksQueryResponse(MetaFileBaseResponse):
-    #
-    md5: str = None
     #
     sha256: str = None
     #
@@ -121,6 +107,6 @@ class MetafileApi(ApiBase):
         data = self._post(self._chunks, args.dict())
         return MetaFileBaseResponse(**data)
 
-    def chunks_query(self, md5, sha256) -> ChunksQueryResponse:
-        data = self._get(self._chunks_query, dict(md5=md5, sha256=sha256))
+    def chunks_query(self, sha256) -> ChunksQueryResponse:
+        data = self._get(self._chunks_query, dict(sha256=sha256))
         return ChunksQueryResponse(**data)

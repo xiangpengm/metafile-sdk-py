@@ -392,6 +392,10 @@ class Metafile():
         metaid = self._check_metaid(metaid, metafile_protocol_node)
         self._check_protocol_node(private_key, metafile_protocol_node)
         files_request, files_resp = self._get_files_resp(metaid, file_path)
+        # 检查是否存在
+        resp = self.metafile_api.files_query(files_request.sha256, metaid)
+        if resp.code == 0:
+            return resp.txid
         log('filesRequest', files_request)
         log('response', files_resp)
         # 获取到session

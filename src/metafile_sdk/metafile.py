@@ -454,7 +454,7 @@ class Metafile():
             except Exception as e:
                 log('e', e)
                 pass
-            print(u, service_fee)
+            log(u, service_fee)
         else :
             self._scan_chunk_record(
                 private_key,

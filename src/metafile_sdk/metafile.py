@@ -27,6 +27,10 @@ class ValueErrorPrivateKey(ValueError):
     pass
 
 
+class UploadFailed(Exception):
+    pass
+
+
 class MetaFileType():
     # 分片
     chunk = 'metafile/chunk'
@@ -369,10 +373,8 @@ class Metafile():
                     file_index.is_sync_metafile = True
                     metaFileTaskChunkOrm.save(file_index)
                     return file_index.txid
-                else:
-                    raise ValueError(chunk_resp)
 
-    def upload_metafile_from_path(self, private_key: PrivateKey, metafile_protocol_node: str, file_path: str, metaid: str=None, feeb=0.5):
+    def upload_metafile_from_path(self, private_key: PrivateKey, metafile_protocol_node: str, file_path: str, metaid: str=None, feeb=0.5, retry_count=2):
         """
         0. 检查文件存在 ok
         1. 验证metaid  ok
@@ -390,6 +392,9 @@ class Metafile():
         :return:
         """
         # 验证文件存在
+        log('retry count', retry_count)
+        if retry_count == 0:
+            raise UploadFailed('上传失败请稍后重试')
         self._check_file(file_path)
         metaid = self._check_metaid(metaid, metafile_protocol_node)
         self._check_protocol_node(private_key, metafile_protocol_node)
@@ -476,7 +481,11 @@ class Metafile():
             # multi thread
             self._push_chunk_to_metafile(metaFileTaskChunkOrm, files_resp)
             txid = self._push_index_to_metafile(private_key, metafile_protocol_node, feeb, metaFileTaskChunkOrm, files_resp, task, info, woc)
-            return txid
+            if txid:
+                return txid
+            else:
+                retry_count -= 1
+                return self.upload_metafile_from_path(private_key, metafile_protocol_node, file_path)
 
     def upload_metafile_from_bytes(private_key: PrivateKey, metafile_protocol_node: str, data_bytes: bytes, metaid: str=None):
         """

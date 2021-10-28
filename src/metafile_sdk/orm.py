@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from metafile_sdk.model.base import MetaFileTask, MetaFileTaskChunk, EnumMetaFileTask
 
 
-class OrmBase():
+class OrmBase(object):
     _lock = Lock()
 
     def __init__(self, session):
@@ -37,6 +37,10 @@ class MetaFileTaskOrm(OrmBase):
             instant = MetaFileTask(**defaults)
             self.save(instant)
             return instant
+
+    def delete_instant(self, instant):
+        self.session.delete(instant)
+        self.session.commit()
 
 
 class MetaFileTaskChunkOrm(OrmBase):
@@ -139,3 +143,9 @@ class MetaFileTaskChunkOrm(OrmBase):
                 return True
             else:
                 return False
+
+    def delete_by_file_id(self, file_id):
+        self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.file_id==file_id
+        ).delete()
+        self.session.commit()

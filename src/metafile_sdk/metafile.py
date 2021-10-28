@@ -482,6 +482,10 @@ class Metafile():
             self._push_chunk_to_metafile(metaFileTaskChunkOrm, files_resp)
             txid = self._push_index_to_metafile(private_key, metafile_protocol_node, feeb, metaFileTaskChunkOrm, files_resp, task, info, woc)
             if txid:
+                # delete task
+                metaFileTaskOrm.delete_instant(task)
+                # delete chunks
+                metaFileTaskChunkOrm.delete_by_file_id(files_resp.file_id)
                 return txid
             else:
                 retry_count -= 1

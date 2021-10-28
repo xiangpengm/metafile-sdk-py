@@ -255,7 +255,6 @@ class Metafile():
                                      (info for _ in range(items_len)),
                                      (woc for _ in range(items_len)))
                 result = [i for i in r]
-                metaFileTaskChunkOrm.commit()
                 log('result', result)
                 # 上传服务
                 r2 = thread_pool.map(self._push_chunk_to_metafile_processor,

@@ -9,7 +9,7 @@ from bitsv.network.meta import Unspent
 from sqlalchemy.orm import Session
 
 from metafile_sdk.api import ShowmandbApi, WocApi, MetafileApi
-from metafile_sdk.api.metafile import FilesRequest, ChunksRequest, InfoResponse
+from metafile_sdk.api.metafile import FilesRequest, ChunksRequest, InfoResponse, ChunksQueryResponse
 from metafile_sdk.model.base import get_session_by_metaid, MetaFileTask, MetaFileTaskChunk, EnumMetaFileTask
 from metafile_sdk.orm import MetaFileTaskOrm, MetaFileTaskChunkOrm
 from metafile_sdk.utils import log, file_data_type
@@ -17,6 +17,7 @@ from metafile_sdk.transaction import Transaction, EnumScriptType
 from metafile_sdk.hash_func import sha256_file, sha256_bytes
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
+from metafile_sdk.version import __version__
 
 class ValueErrorMetafileProtocolNode(ValueError):
     pass
@@ -155,18 +156,19 @@ class Metafile():
                 unspents_satoshi=u
             ))
 
-    def _scan_hash_processor(self, item, metaFileTaskChunkOrm):
+    def _scan_hash_processor(self, item: MetaFileTaskChunk, metaFileTaskChunkOrm):
         _sha256 = item.chunk_sha256
-        chunks_query = self.metafile_api.chunks_query(_sha256)
-        if chunks_query.code == 0:
+        chunks_query: ChunksQueryResponse = self.metafile_api.chunks_query(_sha256)
+        item.scan_chunk = True
+        if chunks_query.code == 0 and chunks_query.txid:
             item.status = EnumMetaFileTask.success
             item.txid = chunks_query.txid
-            metaFileTaskChunkOrm.add(item)
+        metaFileTaskChunkOrm.add(item)
 
     def _scan_hash(self, metaFileTaskChunkOrm, files_resp):
         with ThreadPoolExecutor(self._thread_num) as thread_pool:
             while True:
-                items: List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_doing_chunk_by_number(files_resp.file_id, self._thread_num)
+                items: List[MetaFileTaskChunk] = metaFileTaskChunkOrm.find_no_scan_chunk_by_number(files_resp.file_id, self._thread_num)
                 if items.__len__() == 0:
                     break
                 items_len = items.__len__()
@@ -399,7 +401,7 @@ class Metafile():
         log('filesRequest', files_request)
         log('response', files_resp)
         # 获取到session
-        session: Session = get_session_by_metaid(self.cache_dir, metaid)
+        session: Session = get_session_by_metaid(self.cache_dir, metaid, __version__)
         # 创建表
         MetaFileTask.metadata.create_all(session.get_bind())
         MetaFileTaskChunk.metadata.create_all(session.get_bind())
@@ -466,7 +468,7 @@ class Metafile():
                 metaFileTaskChunkOrm,
                 info
             )
-            # self._scan_hash(metaFileTaskChunkOrm, files_resp)
+            self._scan_hash(metaFileTaskChunkOrm, files_resp)
             self._split_utxo(private_key, metaFileTaskChunkOrm, files_resp.file_id, woc)
             # multi thread
             self._push_chunk_to_chain(private_key, metafile_protocol_node, metaFileTaskChunkOrm, files_resp, task, info, woc)

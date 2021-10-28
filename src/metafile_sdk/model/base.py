@@ -30,7 +30,7 @@ class MetaFileTask(Base, ModelBase):
     __tablename__ = 'meta_file_task'
     size = Column(Integer, nullable=False)
     #
-    name = Column(String(32), nullable=False, unique=True)
+    name = Column(String(32), nullable=False)
     #
     sha256 = Column(String(64), nullable=False, unique=True)
     #
@@ -74,14 +74,16 @@ class MetaFileTaskChunk(Base, ModelBase):
     is_sync_metafile = Column(Boolean, default=False)
     #
     service_fee = Column(Integer)
+    #
+    scan_chunk = Column(Boolean, default=False)
 
     def get_unspents(self):
         if self.unspents_txid and self.unspents_satoshi:
             u = Unspent(self.unspents_satoshi, 0, self.unspents_txid, self.unspents_index)
             return [u]
 
-def get_session_by_metaid(cache_dir, metaid):
-    full_db_path = os.path.join(cache_dir, f'.metafile_sdk_cache_{metaid}.db')
+def get_session_by_metaid(cache_dir, metaid, version):
+    full_db_path = os.path.join(cache_dir, f'.metafile_sdk_cache_{metaid}_{version}.db')
     engine = create_engine(f'sqlite:///{full_db_path}',
                            poolclass=SingletonThreadPool,
                            connect_args={"check_same_thread": False}

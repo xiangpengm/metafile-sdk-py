@@ -63,6 +63,15 @@ class MetaFileTaskChunkOrm(OrmBase):
         ).limit(number)
         return list(instant_list)
 
+    # scan_chunk
+    def find_no_scan_chunk_by_number(self, file_id, number=5):
+        instant_list = self.session.query(MetaFileTaskChunk).filter(
+            MetaFileTaskChunk.chunk_index!=0,
+            MetaFileTaskChunk.file_id==file_id,
+            MetaFileTaskChunk.scan_chunk==False
+        ).limit(number)
+        return list(instant_list)
+
     def update_no_success_tx(self, file_id):
         self.session.query(MetaFileTaskChunk).filter(
             MetaFileTaskChunk.chunk_index!=0,

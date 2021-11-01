@@ -78,10 +78,22 @@ def calculate_index_payload_size(file_size, file_name, data_type, chunk_size=102
     return l + sha256 + fileSize + chunkNumber + chunkSize + dataType + name + item_len
 
 
-def calculate_metafile_slice_all(file_size, file_name, data_type, service_fee_rate, service_fee_min_satoshis, feeb, chunk_size=102400, chunks=None):
+def calculate_metafile_slice_all(file_size, file_name, data_type, service_fee_rate, service_fee_min_satoshis, feeb, chunk_size=102400):
     # 计算总花费的余额
-    if chunks is None:
-        chunks = math.ceil(file_size / chunk_size)
+    chunks = math.ceil(file_size / chunk_size)
+    metaid_other_len = 232
+    index_slice = calculate_index_payload_size(file_size, file_name, data_type, chunk_size)
+    index_payload_len = index_slice + metaid_other_len
+    index_payload_fee = max(math.ceil(index_payload_len * service_fee_rate), service_fee_min_satoshis)
+    index_tx_fee = math.ceil(tx_chunk_size(index_slice) * feeb)  + index_payload_fee
+    chunk_payload_len = chunk_size + metaid_other_len
+    chunk_payload_fee = max(math.ceil(chunk_payload_len * service_fee_rate), service_fee_min_satoshis)
+    chunk_tx_fee = math.ceil(tx_chunk_size(chunk_size) * feeb) + chunk_payload_fee
+    return index_tx_fee + chunk_tx_fee * chunks
+
+
+def calculate_metafile_slice_all_break(file_size, file_name, data_type, service_fee_rate, service_fee_min_satoshis, feeb, chunks, chunk_size=102400):
+    # 计算总花费的余额
     metaid_other_len = 232
     index_slice = calculate_index_payload_size(file_size, file_name, data_type, chunk_size)
     index_payload_len = index_slice + metaid_other_len
@@ -146,17 +158,18 @@ class Metafile():
             raise ValueErrorPrivateKey(f'private_key must protocol node public key')
         log('pk_valid', pk_valid)
 
-    def _get_files_resp(self, metaFileTaskOrm: MetaFileTaskOrm, metaid, file_path):
+    def _get_files_resp(self, metaFileTaskOrm: MetaFileTaskOrm, metaFileTaskChunkOrm: MetaFileTaskChunkOrm, private_key: PrivateKey, metaid, file_path, info: InfoResponse, feeb):
         _sha256 = sha256_file(file_path)
         file_stat = os.stat(file_path)
         file_size = file_stat.st_size
+        file_name = os.path.basename(file_path)
         data_type = file_data_type(file_path)
         # 构造任务
         task = metaFileTaskOrm.get_by_sha256(_sha256)
         log('_get_files_resp task', task)
         # 查询缓存, 如果没有则请求
         files_request = FilesRequest(
-            name=os.path.basename(file_path),
+            name=file_name,
             size=file_size,
             sha256=_sha256,
             metaid=metaid,
@@ -164,9 +177,21 @@ class Metafile():
         )
         if not task:
             # Todo 计算总需要余额
+            need_satoshi = calculate_metafile_slice_all(file_size, file_name, data_type, info.service_fee_rate, info.service_fee_min_satoshis, feeb)
+            balance  = private_key.get_balance()
+            log(f"need satoshi: {need_satoshi}, balance: {balance}")
+            if need_satoshi > int(balance):
+                raise ValueError(f'balance must more than {need_satoshi}')
             files_resp = self.metafile_api.files(files_request)
         else:
             # Todo 获取缓存为上传的chunks计算花费
+            chunks = metaFileTaskChunkOrm.no_success_chunks(task.file_id)
+            log('chunks', chunks)
+            need_satoshi = calculate_metafile_slice_all_break(file_size, file_name, data_type, info.service_fee_rate, info.service_fee_min_satoshis, feeb, chunks)
+            balance  = private_key.get_balance()
+            log(f"need satoshi: {need_satoshi}, balance: {balance}")
+            if need_satoshi > int(balance):
+                raise ValueError(f'balance must more than {need_satoshi}')
             files_resp = MetaFileFilesResponse(
                 code=0,
                 message='',
@@ -448,7 +473,9 @@ class Metafile():
         metaFileTaskOrm = MetaFileTaskOrm(session)
         metaFileTaskChunkOrm = MetaFileTaskChunkOrm(session)
         self._check_protocol_node(private_key, metafile_protocol_node)
-        files_request, files_resp = self._get_files_resp(metaFileTaskOrm, metaid, file_path)
+        # 创建记录
+        info = self.metafile_api.info()
+        files_request, files_resp = self._get_files_resp(metaFileTaskOrm, metaFileTaskChunkOrm, private_key, metaid, file_path, info, feeb)
         # 检查是否存在
         resp = self.metafile_api.files_query(files_request.sha256, metaid)
         if resp.txid:
@@ -467,8 +494,6 @@ class Metafile():
             chunks=files_resp.chunks
         ))
         log("task", task)
-        # 创建记录
-        info = self.metafile_api.info()
         woc = private_key.network_api
         if files_resp.chunks == 0:
             #

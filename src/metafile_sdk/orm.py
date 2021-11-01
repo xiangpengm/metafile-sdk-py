@@ -95,6 +95,14 @@ class MetaFileTaskChunkOrm(OrmBase):
         })
         self.commit()
 
+    def no_success_chunks(self, file_id):
+        chunks = self.session.query(MetaFileTaskChunk).filter(
+                MetaFileTaskChunk.chunk_index!=0,
+                MetaFileTaskChunk.file_id==file_id,
+                MetaFileTaskChunk.status!=EnumMetaFileTask.success,
+        ).count()
+        return chunks
+
     def find_no_unspent_chunk(self, file_id, number=5):
         instant_list = self.session.query(MetaFileTaskChunk).filter(
             MetaFileTaskChunk.chunk_index!=0,

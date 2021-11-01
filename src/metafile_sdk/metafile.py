@@ -3,9 +3,9 @@ import math
 import os
 from typing import List
 
-from bitsv import PrivateKey
-from bitsv.network.fees import DEFAULT_FEE_SLOW
-from bitsv.network.meta import Unspent
+from metafile_sdk.bitsv import PrivateKey
+from metafile_sdk.bitsv.network.fees import DEFAULT_FEE_SLOW
+from metafile_sdk.bitsv.network.meta import Unspent
 from sqlalchemy.orm import Session
 
 from metafile_sdk.api import ShowmandbApi, WocApi, MetafileApi

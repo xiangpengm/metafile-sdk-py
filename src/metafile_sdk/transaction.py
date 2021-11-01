@@ -2,8 +2,8 @@ from enum import Enum
 from io import BytesIO
 from typing import List, Optional
 
-from bitsv.base58 import b58encode_check
-from bitsv.format import MAIN_PUBKEY_HASH
+from metafile_sdk.bitsv.base58 import b58encode_check
+from metafile_sdk.bitsv.format import MAIN_PUBKEY_HASH
 from pydantic import BaseModel
 
 

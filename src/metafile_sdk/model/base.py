@@ -1,7 +1,7 @@
 import os
 from enum import Enum
 
-from bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.network.meta import Unspent
 from sqlalchemy import Column, String, create_engine, BigInteger, TIMESTAMP, func, text, Integer, BLOB, Boolean
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base

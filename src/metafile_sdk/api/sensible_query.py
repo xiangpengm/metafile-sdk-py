@@ -1,5 +1,5 @@
-from bitsv.network.meta import Unspent
-from bitsv.transaction import calc_txid
+from metafile_sdk.bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.transaction import calc_txid
 from metafile_sdk.api.api_base import ApiBase
 
 

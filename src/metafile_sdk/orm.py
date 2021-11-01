@@ -38,6 +38,12 @@ class MetaFileTaskOrm(OrmBase):
             self.save(instant)
             return instant
 
+    def get_by_sha256(self, sha256):
+        instant = self.session.query(MetaFileTask).filter(
+            MetaFileTask.sha256==sha256
+        ).first()
+        return instant
+
     def delete_instant(self, instant):
         self.session.delete(instant)
         self.session.commit()

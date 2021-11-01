@@ -9,7 +9,8 @@ from bitsv.network.meta import Unspent
 from sqlalchemy.orm import Session
 
 from metafile_sdk.api import ShowmandbApi, WocApi, MetafileApi
-from metafile_sdk.api.metafile import FilesRequest, ChunksRequest, InfoResponse, ChunksQueryResponse
+from metafile_sdk.api.metafile import FilesRequest, ChunksRequest, InfoResponse, ChunksQueryResponse, \
+    MetaFileFilesResponse
 from metafile_sdk.model.base import get_session_by_metaid, MetaFileTask, MetaFileTaskChunk, EnumMetaFileTask
 from metafile_sdk.orm import MetaFileTaskOrm, MetaFileTaskChunkOrm
 from metafile_sdk.utils import log, file_data_type
@@ -81,8 +82,6 @@ class Metafile():
         self.metafile_api = MetafileApi(metafile_api_base_url, metafile_api_headers)
         self.woc_api = WocApi(woc_api_base_url, woc_api_headers)
         self.cache_dir = cache_dir
-        self._lock1 = Lock()
-        self._lock2 = Lock()
         self._thread_num = 10
         if not os.path.exists(cache_dir):
             os.makedirs(cache_dir)
@@ -116,13 +115,15 @@ class Metafile():
             raise ValueErrorPrivateKey(f'private_key must protocol node public key')
         log('pk_valid', pk_valid)
 
-    def _get_files_resp(self, metaid, file_path):
+    def _get_files_resp(self, metaFileTaskOrm: MetaFileTaskOrm, metaid, file_path):
         _sha256 = sha256_file(file_path)
         file_stat = os.stat(file_path)
         file_size = file_stat.st_size
-        # log('file_size', type(file_size))
         data_type = file_data_type(file_path)
         # 构造任务
+        task = metaFileTaskOrm.get_by_sha256(_sha256)
+        log('_get_files_resp task', task)
+        # 查询缓存, 如果没有则请求
         files_request = FilesRequest(
             name=os.path.basename(file_path),
             size=file_size,
@@ -130,7 +131,16 @@ class Metafile():
             metaid=metaid,
             data_type=data_type,
         )
-        files_resp = self.metafile_api.files(files_request)
+        if not task:
+            files_resp = self.metafile_api.files(files_request)
+        else:
+            files_resp = MetaFileFilesResponse(
+                code=0,
+                message='',
+                chunk_size=task.size,
+                chunks=task.chunks,
+                file_id=task.file_id
+            )
         return files_request, files_resp
 
     def _scan_chunk_record(self, private_key, metafile_protocol_node, file_path, files_resp, task, feeb, metaFileTaskChunkOrm, info):
@@ -397,14 +407,6 @@ class Metafile():
             raise UploadFailed('上传失败请稍后重试')
         self._check_file(file_path)
         metaid = self._check_metaid(metaid, metafile_protocol_node)
-        self._check_protocol_node(private_key, metafile_protocol_node)
-        files_request, files_resp = self._get_files_resp(metaid, file_path)
-        # 检查是否存在
-        resp = self.metafile_api.files_query(files_request.sha256, metaid)
-        if resp.txid:
-            return resp.txid
-        log('filesRequest', files_request)
-        log('response', files_resp)
         # 获取到session
         session: Session = get_session_by_metaid(self.cache_dir, metaid, __version__)
         # 创建表
@@ -412,6 +414,14 @@ class Metafile():
         MetaFileTaskChunk.metadata.create_all(session.get_bind())
         metaFileTaskOrm = MetaFileTaskOrm(session)
         metaFileTaskChunkOrm = MetaFileTaskChunkOrm(session)
+        self._check_protocol_node(private_key, metafile_protocol_node)
+        files_request, files_resp = self._get_files_resp(metaFileTaskOrm, metaid, file_path)
+        # 检查是否存在
+        resp = self.metafile_api.files_query(files_request.sha256, metaid)
+        if resp.txid:
+            return resp.txid
+        log('filesRequest', files_request)
+        log('response', files_resp)
         # 获取 or 创建任务
         task = metaFileTaskOrm.get_or_create(files_resp.file_id, defaults=dict(
             size=files_request.size,

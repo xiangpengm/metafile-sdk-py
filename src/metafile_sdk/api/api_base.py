@@ -11,9 +11,13 @@ class ApiBase(object):
             self._headers.update(headers)
         self.base_url = base_url
 
-    def _post(self, path, body: dict):
+    def _post(self, path, body: dict, headers=None):
+        if headers:
+            headers.update(self._headers)
+        else:
+            headers = self._headers
         url = f'{self.base_url}{path}'
-        resp = requests.post(url, json=body, headers=self._headers)
+        resp = requests.post(url, json=body, headers=headers)
         log(f"{self.__class__.__name__} POST {path}", resp.content)
         resp.raise_for_status()
         return resp.json()

@@ -278,6 +278,7 @@ class Metafile():
             chunk_resp = self.metafile_api.chunks(chunk_request)
             log('chunk_resp', sync_item.id, chunk_request.txid, chunk_resp)
             if chunk_resp.code == 0:
+                sync_item.txid = chunk_resp.txid
                 sync_item.is_sync_metafile = True
                 metaFileTaskChunkOrm.add(sync_item)
 
@@ -425,8 +426,7 @@ class Metafile():
         log("task", task)
         # 创建记录
         info = self.metafile_api.info()
-        from bitsv.network.services.whatsonchain import Whatsonchain
-        woc = Whatsonchain()
+        woc = private_key.network_api
         if files_resp.chunks == 0:
             #
             log('upload origin')

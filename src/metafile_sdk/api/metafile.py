@@ -62,6 +62,11 @@ class MetaFileBaseResponse(BaseModel):
     message: str
 
 
+class MetaFileChunksResponse(MetaFileBaseResponse):
+    # 交易id
+    txid: str = None
+
+
 class MetaFileFilesResponse(MetaFileBaseResponse):
     #
     chunk_size: int
@@ -109,9 +114,9 @@ class MetafileApi(ApiBase):
         data = self._post(self._files, args.dict())
         return MetaFileFilesResponse(**data)
 
-    def chunks(self, args: ChunksRequest) -> MetaFileBaseResponse:
+    def chunks(self, args: ChunksRequest) -> MetaFileChunksResponse:
         data = self._post(self._chunks, args.dict())
-        return MetaFileBaseResponse(**data)
+        return MetaFileChunksResponse(**data)
 
     def chunks_query(self, sha256) -> ChunksQueryResponse:
         data = self._get(self._chunks_query, dict(sha256=sha256))

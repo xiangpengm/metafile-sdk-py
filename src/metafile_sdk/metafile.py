@@ -82,8 +82,7 @@ def calculate_metafile_slice_all(file_size, file_name, data_type, service_fee_ra
     # 计算总花费的余额
     if chunks is None:
         chunks = math.ceil(file_size / chunk_size)
-    metaid_other = [b'meta', b'02e729268d3d4f6150dbb69957a994f4a5e8713d39e73f68007cbef9aa34106d71', b'83bfc2b56d349b6a65afc3fd3054234bb80822b0544149e6a96caede23b7d214', b'metaid', b'5985d3a6b1db036ce7f5155804a546c3dd08ec8c00275c9a59caba1a02568f0e_0'] + [b'0', b'1.0.2', b'metafile/index', b'binary']
-    metaid_other_len = sum([len(i) for i in metaid_other])
+    metaid_other_len = 232
     index_slice = calculate_index_payload_size(file_size, file_name, data_type, chunk_size)
     index_payload_len = index_slice + metaid_other_len
     index_payload_fee = max(math.ceil(index_payload_len * service_fee_rate), service_fee_min_satoshis)

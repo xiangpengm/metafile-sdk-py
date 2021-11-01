@@ -164,8 +164,10 @@ class Metafile():
             data_type=data_type,
         )
         if not task:
+            # Todo 计算总需要余额
             files_resp = self.metafile_api.files(files_request)
         else:
+            # Todo 获取缓存为上传的chunks计算花费
             files_resp = MetaFileFilesResponse(
                 code=0,
                 message='',

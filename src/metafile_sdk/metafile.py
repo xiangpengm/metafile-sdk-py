@@ -59,7 +59,7 @@ def create_meta_file_extended_data_list(
     return data_list
 
 def tx_chunk_size(chunk: bytes):
-    size = 148 + 2 + 4 + 67 + 65 + 7 + 67 + 9 + chunk.__len__()  + 2 + 7 + 21 + 7 + 10 + 34 * 2 + 3
+    size = 148 + 2 + 4 + 67 + 65 + 7 + 67 + 9 + chunk.__len__()  + 2 + 7 + 21 + 7 + 10 + 34 * 2 + 3 + 2
     return size
 
 def per_utxo_amount(chunk_bytes, feeb, data_list, service_fee_min_satoshis, service_fee_rate):
@@ -137,7 +137,7 @@ class Metafile():
             files_resp = MetaFileFilesResponse(
                 code=0,
                 message='',
-                chunk_size=task.size,
+                chunk_size=task.chunk_size,
                 chunks=task.chunks,
                 file_id=task.file_id
             )

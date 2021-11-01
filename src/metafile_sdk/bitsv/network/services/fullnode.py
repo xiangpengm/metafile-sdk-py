@@ -2,9 +2,9 @@ import platform
 import os
 from functools import wraps
 from bitcoinrpc.authproxy import AuthServiceProxy
-from bitsv.constants import BSV
-from bitsv.network.meta import Unspent
-from bitsv.network.transaction import Transaction, TxInput, TxOutput
+from metafile_sdk.bitsv.constants import BSV
+from metafile_sdk.bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.network.transaction import Transaction, TxInput, TxOutput
 from .standardrpcmethods import standard_methods
 
 BSV_TO_SAT_MULTIPLIER = BSV

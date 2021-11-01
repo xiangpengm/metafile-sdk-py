@@ -1,6 +1,6 @@
 import click
 
-from bitsv.keygen import generate_matching_address
+from metafile_sdk.bitsv.keygen import generate_matching_address
 
 
 @click.group(invoke_without_command=True)

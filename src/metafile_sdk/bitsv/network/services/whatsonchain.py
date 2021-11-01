@@ -2,9 +2,9 @@ from typing import List
 
 from whatsonchain.api import Whatsonchain
 
-from bitsv.constants import BSV
-from bitsv.network.meta import Unspent
-from bitsv.network.transaction import TxInput, TxOutput, Transaction
+from metafile_sdk.bitsv.constants import BSV
+from metafile_sdk.bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.network.transaction import TxInput, TxOutput, Transaction
 
 
 def woc_tx_to_transaction(response):

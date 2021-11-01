@@ -5,8 +5,8 @@ from time import time
 
 import requests
 
-from bitsv.utils import Decimal
-from bitsv.constants import SATOSHI, uBSV, mBSV, BSV
+from metafile_sdk.bitsv.utils import Decimal
+from metafile_sdk.bitsv.constants import SATOSHI, uBSV, mBSV, BSV
 
 DEFAULT_CACHE_TIME = 60
 

@@ -1,8 +1,8 @@
 from coincurve import verify_signature as _vs
 
-from bitsv.base58 import b58decode_check, b58encode_check
-from bitsv.crypto import ripemd160_sha256
-from bitsv.curve import x_to_y
+from metafile_sdk.bitsv.base58 import b58decode_check, b58encode_check
+from metafile_sdk.bitsv.crypto import ripemd160_sha256
+from metafile_sdk.bitsv.curve import x_to_y
 
 # See https://en.bitcoin.it/wiki/List_of_address_prefixes
 # Referred to henceforth as the "prefix"

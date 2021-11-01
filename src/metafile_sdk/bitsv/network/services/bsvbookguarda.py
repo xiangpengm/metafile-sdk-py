@@ -1,12 +1,12 @@
 import requests
 from decimal import Decimal
 
-from bitsv.network import currency_to_satoshi
-from bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.network import currency_to_satoshi
+from metafile_sdk.bitsv.network.meta import Unspent
 
 # left here as a reminder to normalize get_transaction()
-from bitsv.network.transaction import Transaction, TxInput, TxOutput
-from bitsv.constants import BSV
+from metafile_sdk.bitsv.network.transaction import Transaction, TxInput, TxOutput
+from metafile_sdk.bitsv.constants import BSV
 
 DEFAULT_TIMEOUT = 30
 BSV_TO_SAT_MULTIPLIER = BSV

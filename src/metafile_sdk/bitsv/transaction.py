@@ -1,11 +1,11 @@
 import logging
 from collections import namedtuple, deque
 
-from bitsv.crypto import double_sha256, sha256
-from bitsv.exceptions import InsufficientFunds
-from bitsv.format import address_to_public_key_hash
-from bitsv.network.rates import currency_to_satoshi_cached
-from bitsv.utils import (
+from metafile_sdk.bitsv.crypto import double_sha256, sha256
+from metafile_sdk.bitsv.exceptions import InsufficientFunds
+from metafile_sdk.bitsv.format import address_to_public_key_hash
+from metafile_sdk.bitsv.network.rates import currency_to_satoshi_cached
+from metafile_sdk.bitsv.utils import (
     bytes_to_hex, chunk_data, hex_to_bytes, int_to_varint
 )
 import math

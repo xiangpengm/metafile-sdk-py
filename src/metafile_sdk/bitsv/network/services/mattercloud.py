@@ -2,8 +2,8 @@ import json
 
 import requests
 
-from bitsv.network.meta import Unspent
-from bitsv.network.transaction import Transaction, TxInput, TxOutput
+from metafile_sdk.bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.network.transaction import Transaction, TxInput, TxOutput
 
 MATTERCLOUD_API_KEY_VARNAME = 'MATTERCLOUD_API_KEY'
 

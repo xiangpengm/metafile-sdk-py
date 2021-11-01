@@ -1,18 +1,18 @@
 import json
 
-from bitsv.crypto import ECPrivateKey
-from bitsv.curve import Point
-from bitsv.format import (
+from metafile_sdk.bitsv.crypto import ECPrivateKey
+from metafile_sdk.bitsv.curve import Point
+from metafile_sdk.bitsv.format import (
     bytes_to_wif, public_key_to_address, public_key_to_coords, wif_to_bytes,
     address_to_public_key_hash
 )
-from bitsv.network import NetworkAPI, get_fee, satoshi_to_currency_cached, fees
-from bitsv.network.meta import Unspent
-from bitsv.transaction import (
+from metafile_sdk.bitsv.network import NetworkAPI, get_fee, satoshi_to_currency_cached, fees
+from metafile_sdk.bitsv.network.meta import Unspent
+from metafile_sdk.bitsv.transaction import (
     calc_txid, create_p2pkh_transaction, sanitize_tx_data,
     OP_CHECKSIG, OP_DUP, OP_EQUALVERIFY, OP_HASH160, OP_PUSH_20
     )
-from bitsv import op_return
+from metafile_sdk.bitsv import op_return
 
 # Instantiate Main, Test and STN NetworkAPI instances for use by all PrivateKey[Test]'s
 network_api_main = NetworkAPI('main')

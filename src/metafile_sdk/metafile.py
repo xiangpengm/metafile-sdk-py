@@ -58,14 +58,46 @@ def create_meta_file_extended_data_list(
     ]
     return data_list
 
-def tx_chunk_size(chunk: bytes):
-    size = 148 + 2 + 4 + 67 + 65 + 7 + 67 + 9 + chunk.__len__()  + 2 + 7 + 21 + 7 + 10 + 34 * 2 + 3 + 2
+
+def tx_chunk_size(chunk_len: int):
+    size = 148 + 2 + 4 + 67 + 65 + 7 + 67 + 9 + chunk_len + 2 + 7 + 21 + 7 + 10 + 34 * 2 + 3 + 2
     return size
+
+
+def calculate_index_payload_size(file_size, file_name, data_type, chunk_size=102400):
+    # 计算索引交易的字节数
+    number = math.ceil(file_size/chunk_size)
+    l = 2
+    sha256 = 8 + 1 + 64 + 2 + 1
+    fileSize = 10 + 1 + len(str(file_size)) + 1
+    chunkNumber = 13 + 1 + len(str(number)) + 1
+    chunkSize = 11 + 1 + len(str(chunk_size)) + 1
+    dataType = 10 + 1 + len(data_type) + 2 + 1
+    name = 6 + 1 + len(file_name) + 2 + 1
+    item_len = 12 + 151 * number + 2 + (number - 1)
+    return l + sha256 + fileSize + chunkNumber + chunkSize + dataType + name + item_len
+
+
+def calculate_metafile_slice_all(file_size, file_name, data_type, service_fee_rate, service_fee_min_satoshis, feeb, chunk_size=102400, chunks=None):
+    # 计算总花费的余额
+    if chunks is None:
+        chunks = math.ceil(file_size / chunk_size)
+    metaid_other = [b'meta', b'02e729268d3d4f6150dbb69957a994f4a5e8713d39e73f68007cbef9aa34106d71', b'83bfc2b56d349b6a65afc3fd3054234bb80822b0544149e6a96caede23b7d214', b'metaid', b'5985d3a6b1db036ce7f5155804a546c3dd08ec8c00275c9a59caba1a02568f0e_0'] + [b'0', b'1.0.2', b'metafile/index', b'binary']
+    metaid_other_len = sum([len(i) for i in metaid_other])
+    index_slice = calculate_index_payload_size(file_size, file_name, data_type, chunk_size)
+    index_payload_len = index_slice + metaid_other_len
+    index_payload_fee = max(math.ceil(index_payload_len * service_fee_rate), service_fee_min_satoshis)
+    index_tx_fee = math.ceil(tx_chunk_size(index_slice) * feeb)  + index_payload_fee
+    chunk_payload_len = chunk_size + metaid_other_len
+    chunk_payload_fee = max(math.ceil(chunk_payload_len * service_fee_rate), service_fee_min_satoshis)
+    chunk_tx_fee = math.ceil(tx_chunk_size(chunk_size) * feeb) + chunk_payload_fee
+    return index_tx_fee + chunk_tx_fee * chunks
+
 
 def per_utxo_amount(chunk_bytes, feeb, data_list, service_fee_min_satoshis, service_fee_rate):
     data_len = sum([len(data) for data in data_list])
     service_fee = max(math.ceil(data_len * service_fee_rate), service_fee_min_satoshis)
-    return math.ceil(tx_chunk_size(chunk_bytes) * feeb) + service_fee, service_fee
+    return math.ceil(tx_chunk_size(chunk_bytes.__len__()) * feeb) + service_fee, service_fee
 
 
 class Metafile():
@@ -165,7 +197,7 @@ class Metafile():
                 status=EnumMetaFileTask.doing,
                 chunk_binary=chunk_bytes,
                 chunk_binary_length=chunk_bytes.__len__(),
-                estimate_tx_size = tx_chunk_size(chunk_bytes),
+                estimate_tx_size = tx_chunk_size(chunk_bytes.__len__()),
                 service_fee=service_fee,
                 unspents_satoshi=u
             ))
@@ -349,7 +381,7 @@ class Metafile():
                 status=EnumMetaFileTask.doing,
                 chunk_binary=index_bytes,
                 chunk_binary_length=index_bytes.__len__(),
-                estimate_tx_size = tx_chunk_size(index_bytes),
+                estimate_tx_size = tx_chunk_size(index_bytes.__len__()),
                 service_fee=service_fee
             ))
             if file_index.status == EnumMetaFileTask.success:

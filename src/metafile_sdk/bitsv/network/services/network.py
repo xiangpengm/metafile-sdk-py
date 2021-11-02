@@ -165,3 +165,13 @@ class NetworkAPI:
         call_list = [api.send_transaction for api in self.list_of_apis]
         tx_id = self.invoke_api_call(call_list, tx_hex)
         return tx_id
+
+    def broadcast_rawtx(self, tx_hex):
+        """Broadcasts a transaction to the blockchain.
+        :param tx_hex: A signed transaction in hex form.
+        :type tx_hex: ``str``
+        :raises ConnectionError: If all API services fail.
+        """
+        call_list = [api.send_transaction for api in self.list_of_apis]
+        tx_id = self.invoke_api_call(call_list, tx_hex)
+        return tx_id

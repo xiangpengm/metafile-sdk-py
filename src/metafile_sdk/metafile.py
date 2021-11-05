@@ -23,15 +23,7 @@ from metafile_sdk.version import __version__
 from metafile_sdk.bitsv import Key
 
 
-class ValueErrorMetafileProtocolNode(ValueError):
-    pass
-
-
-class ValueErrorPrivateKey(ValueError):
-    pass
-
-
-class UploadFailed(Exception):
+class ValueErrorMetafile(ValueError):
     pass
 
 
@@ -133,7 +125,8 @@ class Metafile():
             os.makedirs(cache_dir)
 
     def _check_file(self, file_path: str):
-        pass
+        if not os.path.exists(file_path):
+            raise ValueErrorMetafile(f'{file_path} not exists')
 
     def _check_metaid(self, metaid, metafile_protocol_node):
         if metaid is None:
@@ -142,7 +135,7 @@ class Metafile():
             if metaid_node.code == 0:
                 metaid = metaid_node.data.metanetId
             else:
-                raise ValueErrorMetafileProtocolNode(f'{metafile_protocol_node} node must have metaid node')
+                raise ValueErrorMetafile(f'{metafile_protocol_node} node must have metaid node')
         return metaid
 
     def _check_protocol_node(self, private_key, metafile_protocol_node):
@@ -160,7 +153,7 @@ class Metafile():
                     elif private_key.address == node_pubkey:
                         pk_valid = True
         if not pk_valid:
-            raise ValueErrorPrivateKey(f'protocol public key mismatch')
+            raise ValueErrorMetafile(f'protocol public key mismatch')
         log('pk_valid', pk_valid)
 
     def _get_files_resp(self, metaFileTaskOrm: MetaFileTaskOrm, metaFileTaskChunkOrm: MetaFileTaskChunkOrm, private_key: PrivateKey, metaid, file_path, info: InfoResponse, feeb):
@@ -186,7 +179,7 @@ class Metafile():
             balance  = private_key.get_balance()
             log(f"need satoshi: {need_satoshi}, balance: {balance}")
             if need_satoshi > int(balance):
-                raise ValueError(f'balance must more than {need_satoshi}')
+                raise ValueErrorMetafile(f'balance must more than {need_satoshi}')
             files_resp = self.metafile_api.files(files_request)
         else:
             # Todo 获取缓存为上传的chunks计算花费
@@ -196,7 +189,7 @@ class Metafile():
             balance  = private_key.get_balance()
             log(f"need satoshi: {need_satoshi}, balance: {balance}")
             if need_satoshi > int(balance):
-                raise ValueError(f'balance must more than {need_satoshi}')
+                raise ValueErrorMetafile(f'balance must more than {need_satoshi}')
             files_resp = MetaFileFilesResponse(
                 code=0,
                 message='',
@@ -474,7 +467,7 @@ class Metafile():
                     metaFileTaskChunkOrm.save(file_index)
                     return file_index.txid
 
-    def upload_metafile_from_path(self, private_key: PrivateKey, metafile_protocol_node: str, file_path: str, metaid: str=None, feeb=0.5, retry_count=2):
+    def _upload_metafile_from_path(self, private_key: PrivateKey, metafile_protocol_node: str, file_path: str, metaid: str=None, feeb=0.5):
         """
         0. 检查文件存在 ok
         1. 验证metaid  ok
@@ -493,9 +486,6 @@ class Metafile():
         """
         # 验证文件存在
         log('--------------------------')
-        log('retry count', retry_count)
-        if retry_count == 0:
-            raise UploadFailed('上传失败请稍后重试')
         self._check_file(file_path)
         metaid = self._check_metaid(metaid, metafile_protocol_node)
         # 获取到session
@@ -547,22 +537,18 @@ class Metafile():
                 (info.service_fee_address, service_fee, 'satoshi')
             ]
             tx = private_key.create_op_return_tx(data_list, outputs=outputs, unspents=up, fee=DEFAULT_FEE_SLOW)
-            try:
-                txid = woc.broadcast_rawtx(tx)
-                chunk_request = ChunksRequest(
-                    file_id=files_resp.file_id,
-                    sha256=files_request.sha256,
-                    chunk_sequence=0,
-                    txid=txid)
-                chunk_resp = self.metafile_api.chunks(chunk_request)
-                log('chunk_resp', chunk_resp)
-                if chunk_resp.code == 0:
-                    return txid
-            except Exception as e:
-                log('e', e)
-                pass
             log(u, service_fee)
-        else :
+            txid = woc.broadcast_rawtx(tx)
+            chunk_request = ChunksRequest(
+                file_id=files_resp.file_id,
+                sha256=files_request.sha256,
+                chunk_sequence=0,
+                txid=txid)
+            chunk_resp = self.metafile_api.chunks(chunk_request)
+            log('chunk_resp', chunk_resp)
+            if chunk_resp.code == 0:
+                return txid
+        else:
             self._scan_chunk_record(
                 private_key,
                 metafile_protocol_node,
@@ -582,15 +568,25 @@ class Metafile():
             # multi thread
             self._push_chunk_to_metafile(metaFileTaskChunkOrm, files_resp)
             txid = self._push_index_to_metafile(private_key, metafile_protocol_node, feeb, metaFileTaskChunkOrm, files_resp, task, info, woc)
-            if txid:
-                # delete task
-                metaFileTaskOrm.delete_instant(task)
-                # delete chunks
-                metaFileTaskChunkOrm.delete_by_file_id(files_resp.file_id)
-                return txid
+            return txid
+
+
+    def upload_metafile_from_path(self, private_key: PrivateKey, metafile_protocol_node: str, file_path: str, metaid: str=None, feeb=0.5, retry_count=5):
+        if retry_count == 0:
+            raise ValueErrorMetafile('上传失败请稍后重试')
+        else:
+            retry_count -= 1
+            try:
+                resp = self._upload_metafile_from_path(private_key, metafile_protocol_node, file_path, metaid, feeb)
+            except Exception as e:
+                if isinstance(e, ValueErrorMetafile):
+                   raise e
+                resp = None
+            if resp:
+                return resp
             else:
-                retry_count -= 1
-                return self.upload_metafile_from_path(private_key, metafile_protocol_node, file_path, metaid)
+                return self.upload_metafile_from_path(private_key, metafile_protocol_node, file_path, metaid, feeb, retry_count)
+
 
     def upload_metafile_from_bytes(private_key: PrivateKey, metafile_protocol_node: str, data_bytes: bytes, metaid: str=None):
         """

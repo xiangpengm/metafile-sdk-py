@@ -20,6 +20,8 @@ from metafile_sdk.hash_func import sha256_file, sha256_bytes
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from metafile_sdk.version import __version__
+from metafile_sdk.bitsv import Key
+
 
 class ValueErrorMetafileProtocolNode(ValueError):
     pass
@@ -307,7 +309,7 @@ class Metafile():
         up = item.get_unspents()
         # 构造交易
         data_list = create_meta_file_extended_data_list(
-            private_key.public_key.hex(),
+            Key().public_key.hex(),
             metafile_protocol_node,
             f'{task.sha256}_{item.chunk_index}',
             item.chunk_binary,
@@ -418,7 +420,7 @@ class Metafile():
             log('258 payload', payload)
             index_bytes = json.dumps(payload, separators=(',', ':')).encode()
             data_list = create_meta_file_extended_data_list(
-                private_key.public_key.hex(),
+                Key().public_key.hex(),
                 metafile_protocol_node,
                 f'{task.sha256}_{0}',
                 index_bytes,

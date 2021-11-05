@@ -21,14 +21,19 @@ class MetasvApi(ApiBase):
     def get_unspents(self, address):
         # 获取utxo
         path = self._address_utxo.format(address)
-        utxo_list = self._get(path)
         result_list = []
-        for utxo in utxo_list:
-            new_utxo = Unspent(amount=utxo['value'],
-                               confirmations=0,
-                               txid=utxo['txid'],
-                               txindex=utxo['outIndex'])
-            result_list.append(new_utxo)
+        flag = None
+        while True:
+            utxo_list = self._get(path, {'flag': flag})
+            if utxo_list.__len__() == 0:
+                break
+            for utxo in utxo_list:
+                new_utxo = Unspent(amount=utxo['value'],
+                                   confirmations=0,
+                                   txid=utxo['txid'],
+                                   txindex=utxo['outIndex'])
+                flag = utxo['flag']
+                result_list.append(new_utxo)
         return result_list
 
     def broadcast_rawtx(self, rawtx):

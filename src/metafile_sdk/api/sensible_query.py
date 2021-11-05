@@ -20,7 +20,7 @@ class SensibleQueryApi(ApiBase):
         # 获取utxo
         utxo_list = []
         path = self._address_utxo.format(address)
-        buffer_size = 100
+        buffer_size = 5120
         start = 0
         while True:
             sub_utxo_resp = self._get(path, params={

@@ -533,7 +533,7 @@ class Metafile():
             log('upload origin')
             file_bytes = open(file_path, 'rb').read()
             data_list = create_meta_file_extended_data_list(
-                private_key.public_key.hex(),
+                Key().public_key.hex(),
                 metafile_protocol_node,
                 files_request.name,
                 file_bytes,

@@ -1,6 +1,7 @@
 import json
 import math
 import os
+from time import sleep
 from typing import List
 
 from metafile_sdk.bitsv import PrivateKey
@@ -114,7 +115,7 @@ def per_utxo_amount(chunk_bytes, feeb, data_list, service_fee_min_satoshis, serv
 class Metafile():
 
     def __init__(self, cache_dir: str='./',
-                 showmandb_base_url= 'https://api.showmoney.app/showMANDB/api',
+                 showmandb_base_url= 'https://api.showmoney.app',
                  showmandb_headers=None,
                  metafile_api_base_url='https://metafile.id',
                  metafile_api_headers=None,
@@ -136,8 +137,8 @@ class Metafile():
         if metaid is None:
             # get metaid root node from showmandb
             metaid_node = self.showmandb_api.metanet_getnode(metafile_protocol_node)
-            if metaid_node.code == 200:
-                metaid = metaid_node.result.rootTxId
+            if metaid_node.code == 0:
+                metaid = metaid_node.data.metanetId
             else:
                 raise ValueErrorMetafileProtocolNode(f'{metafile_protocol_node} node must have metaid node')
         return metaid
@@ -153,6 +154,8 @@ class Metafile():
                     node_pubkey = tx_output.script.get_data()[1].decode()
                     log('data', private_key.public_key.hex(), node_pubkey)
                     if private_key.public_key.hex() == node_pubkey:
+                        pk_valid = True
+                    elif private_key.address == node_pubkey:
                         pk_valid = True
         if not pk_valid:
             raise ValueErrorPrivateKey(f'private_key must protocol node public key')
@@ -201,8 +204,31 @@ class Metafile():
             )
         return files_request, files_resp
 
-    def _scan_chunk_record(self, private_key, metafile_protocol_node, file_path, files_resp, task, feeb, metaFileTaskChunkOrm, info):
+    def _scan_chunk_record(self, private_key, metafile_protocol_node, file_path, files_request, files_resp, task, feeb, metaFileTaskChunkOrm, info):
         file_handler = open(file_path, 'rb')
+        # 创建index交易
+        index_payload_size = calculate_index_payload_size(files_request.size, files_request.name, files_request.data_type, files_resp.chunk_size)
+        index_bytes_mock = b'0' * index_payload_size
+        data_list = create_meta_file_extended_data_list(
+            private_key.public_key.hex(),
+            metafile_protocol_node,
+            f'{task.sha256}_{0}',
+            index_bytes_mock,
+            MetaFileType.index,
+            '1.0.2'
+        )
+        u, service_fee = per_utxo_amount(index_bytes_mock, feeb, data_list, info.service_fee_min_satoshis, info.service_fee_rate)
+        metaFileTaskChunkOrm.get_or_create(files_resp.file_id, 0, defaults=dict(
+            file_id=files_resp.file_id,
+            chunk_index=0,
+            chunk_sha256=sha256_bytes(index_bytes_mock),
+            status=EnumMetaFileTask.doing,
+            chunk_binary=index_bytes_mock,
+            chunk_binary_length=index_bytes_mock.__len__(),
+            estimate_tx_size = tx_chunk_size(index_bytes_mock.__len__()),
+            service_fee=service_fee,
+            unspents_satoshi=u
+        ))
         for i in range(1, files_resp.chunks+1):
             seek_start = (i - 1) * files_resp.chunk_size
             file_handler.seek(seek_start)
@@ -324,6 +350,8 @@ class Metafile():
                                      (woc for _ in range(items_len)))
                 result = [i for i in r]
                 log('result', result)
+                # 上链后2s再同步metafile.id
+                sleep(2)
                 # 上传服务
                 r2 = thread_pool.map(self._push_chunk_to_metafile_processor,
                                     items,
@@ -410,11 +438,13 @@ class Metafile():
                 estimate_tx_size = tx_chunk_size(index_bytes.__len__()),
                 service_fee=service_fee
             ))
+            file_index.chunk_sha256 = sha256_bytes(index_bytes)
+            file_index.chunk_binary = index_bytes
             if file_index.status == EnumMetaFileTask.success:
                 file_index.status = EnumMetaFileTask.success
                 metaFileTaskChunkOrm.save(file_index)
             else:
-                up = private_key.get_unspents()
+                up = file_index.get_unspents()
                 outputs = [
                     (info.service_fee_address, file_index.service_fee, 'satoshi')
                 ]
@@ -460,6 +490,7 @@ class Metafile():
         :return:
         """
         # 验证文件存在
+        log('--------------------------')
         log('retry count', retry_count)
         if retry_count == 0:
             raise UploadFailed('上传失败请稍后重试')
@@ -534,6 +565,7 @@ class Metafile():
                 private_key,
                 metafile_protocol_node,
                 file_path,
+                files_request,
                 files_resp,
                 task,
                 feeb,
@@ -550,13 +582,13 @@ class Metafile():
             txid = self._push_index_to_metafile(private_key, metafile_protocol_node, feeb, metaFileTaskChunkOrm, files_resp, task, info, woc)
             if txid:
                 # delete task
-                metaFileTaskOrm.delete_instant(task)
+                # metaFileTaskOrm.delete_instant(task)
                 # delete chunks
-                metaFileTaskChunkOrm.delete_by_file_id(files_resp.file_id)
+                # metaFileTaskChunkOrm.delete_by_file_id(files_resp.file_id)
                 return txid
             else:
                 retry_count -= 1
-                return self.upload_metafile_from_path(private_key, metafile_protocol_node, file_path)
+                return self.upload_metafile_from_path(private_key, metafile_protocol_node, file_path, metaid)
 
     def upload_metafile_from_bytes(private_key: PrivateKey, metafile_protocol_node: str, data_bytes: bytes, metaid: str=None):
         """

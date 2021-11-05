@@ -24,7 +24,7 @@ class MetanetNodeInfo(BaseModel):
 
 class MetanetGetNode(BaseModel):
     code: int
-    data: MetanetNodeInfo
+    data: MetanetNodeInfo = None
 
 
 class ShowmandbApi(ApiBase):
@@ -41,6 +41,8 @@ class ShowmandbApi(ApiBase):
 
     def metanet_getnode(self, txid):
         path = self._metanet_getnode.format(txid)
-        data = self._get(path)
-        print(data)
-        return MetanetGetNode(**data)
+        try:
+            data = self._get(path)
+            return MetanetGetNode(**data)
+        except:
+            return MetanetGetNode(code=1)

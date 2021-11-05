@@ -158,7 +158,7 @@ class Metafile():
                     elif private_key.address == node_pubkey:
                         pk_valid = True
         if not pk_valid:
-            raise ValueErrorPrivateKey(f'private_key must protocol node public key')
+            raise ValueErrorPrivateKey(f'protocol public key mismatch')
         log('pk_valid', pk_valid)
 
     def _get_files_resp(self, metaFileTaskOrm: MetaFileTaskOrm, metaFileTaskChunkOrm: MetaFileTaskChunkOrm, private_key: PrivateKey, metaid, file_path, info: InfoResponse, feeb):

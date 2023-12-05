@@ -133,7 +133,7 @@ class Metafile():
             # get metaid root node from showmandb
             metaid_node = self.showmandb_api.metanet_getnode(metafile_protocol_node)
             if metaid_node.code == 0:
-                metaid = metaid_node.data.metanetId
+                metaid = metaid_node.data.rootTxId
             else:
                 raise ValueErrorMetafile(f'{metafile_protocol_node} node must have metaid node')
         return metaid
